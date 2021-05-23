@@ -45,26 +45,30 @@
 #define J_LAST      Geometry.jBound[Geometry.jZones]
 #define K_LAST		Geometry.kBound[Geometry.kZones]
 
-#define I_PERIODIC false
-#define J_PERIODIC false
-#define K_PERIODIC false
+//#define I_PERIODIC false
+//#define J_PERIODIC false
+//#define K_PERIODIC false
+
+#define I_PERIODIC Geometry.modePeriodic[0]
+#define J_PERIODIC Geometry.modePeriodic[1]
+#define K_PERIODIC Geometry.modePeriodic[2]
 
 #define LOOP_I	for(i=I_FIRST; i<I_LAST; i++)
 #define LOOP_J	for(j=J_FIRST; j<J_LAST; j++)
 #define LOOP_K	for(k=K_FIRST; k<K_LAST; k++)
 
 #define MIN_DEGREES  ((int)77)		       //minimum temperature
-#define MAX_DEGREES	 ((int)4000)	       //maximum degrees in lookup table
+#define MAX_DEGREES	 ((int)3300)	       //maximum degrees in lookup table
 
 #define MAX_DIM		 ((int)(3))			 //maximum number of dimensions
-#define MAX_I        ((int)(0x400))      //maximum number of i-nodes
-#define MAX_J        ((int)(0x200))      //maximum number of j-nodes
-#define MAX_K		 ((int)(0x100))		 //maximum number of k-nodes
-#define MAX_NODES	 ((int)(0x1000000))	 //maximum total number of nodes
+#define MAX_I        ((int)(0x400000))      //maximum number of i-nodes
+#define MAX_J        ((int)(0x20000))      //maximum number of j-nodes
+#define MAX_K		 ((int)(0x10000))		 //maximum number of k-nodes
+#define MAX_NODES	 ((int)(0x10000000))	 //maximum total number of nodes
 #define MAX_JREGIONS 16		       //maximum vertical regions (layers)
 #define MAX_IREGIONS 16		       //maximum horizontal regions
 #define MAX_KREGIONS 16			   //maximum front-back regions
-#define MAX_REGIONS	 256		   //maximum total regions (including overlays)
+#define MAX_REGIONS	 20000		   //maximum total regions (including overlays)
 #define MIN_NODESIZE ((double)5E-7)	//minimum node size [cm]
 #define MAX_NODESIZE ((double)1.0001)    //maximum node size [cm]
 
@@ -73,12 +77,12 @@
 
 #define MAX_TCHANGE	 ((double)1000.0)	//maximum temperature change
 #define MAX_ICHANGE	 ((double)0.98)		//maximum fraction solid change
-#define MAX_RETRIES	 ((int) 6)			//maximum number of retries for clock reduction
+#define MAX_RETRIES	 ((int) 48)			//maximum number of retries for clock reduction
 
 #define MIN_LAMBDA	 ((double)1E-7) //minimum laser wavelength [m]
 #define MAX_LAMBDA	 ((double)1E-5)	//maximum laser wavelength [m]
 #define MIN_ENERGY	 ((double)0.0)  //minimum laser energy density [J/cm2]
-#define MAX_ENERGY	 ((double)100.0)	//maximum laser energy density [J/cm2]
+#define MAX_ENERGY	 ((double)2000.0)	//maximum laser energy density [J/cm2]
 #define MAX_BZ		 ((int) 3)		//maximum number of boundary zones
 
 #define MSG_END_PROGRAM ((int) 0x01)	//signal to end program
@@ -90,7 +94,9 @@
 #define FRONT ((int)0x010)
 #define BACK ((int)0x020)
 #define HETEROGENEOUS ((int)0x040)	//special hemispherical interface
+#define HETEROGENEOUS_LIQUID ((int)0x140)	//special hemispherical interface
 #define HOMOGENEOUS ((int)0x080)	//special spherical interface
+#define HOMOGENEOUS_LIQUID ((int)0x180)	//special spherical interface
 #define SURFACEMELT	((int)0x100)
 #define ALL_DIRECTIONS ((int)0x1FF)   // NESWUDHHS = 9 filled bits
 #define ALL_DIRORDINARY	((int)0x03F)	// NESWUD = 6 filled bits
@@ -199,6 +205,9 @@ typedef struct			// Laser parameters
 	double normTemporal;	// normalization factor for temporal curve
     double waveLength;		// wavelength (Meters)
 
+	double velocityX;	// The velocity in the X direction that the beam moves
+	double velocityZ;	// The velocity in the Z direction that the beam moves
+
 	MATRIX2D egySpatial;		// indexed in i-space
 	
 	GENERIC dataSpatialX;		//input spatial x-profile
@@ -217,8 +226,11 @@ typedef struct
     
     double *enthalpyH;   	//lookup table heat of fusion
     double *heatCapacity;	//lookup table [MAX_DEGREES]
-    double *hetNucleation;	//heterogeneous nucleation
-    double *homNucleation;	//homogeneous nucleation
+    double *hetNucleation;	//heterogeneous nucleation to solid
+    double *homNucleation;	//homogeneous nucleation to solid
+	double *hetNucleationLiquid;  //heterogeneous nucleation to liquid
+	double *homNucleationLiquid;  //homogeneous nucleation to liquid
+	double *hetNucleationLiquidSurface;  //heterogeneous nucleation to liquid at free surface
     double *indexN;
     double *indexK;
     double *interfaceResponse;	//lookup table
@@ -243,14 +255,27 @@ typedef struct
 	int *kLocations;	//sheets that this region spans
 	int *phaseIndex;	//list of phase numbers associated with this region
 
+	int grainIndex;     //The index of the grain which this region belongs to
+						//Primarily used to identify grain boundaries
+	int layerIndex;     //The index of the layer which this region belongs to
+						//Primarily used to identify interface that can withstand certain degrees of over heating
+
 	bool canChange;		//can form liquid phase
+	bool isSurface;     //whether the region is surface layer (For different interface response function)
+	bool isInterface;   //whether the region is interface (Si/SiO2) layer (For different interface response function)
     bool catalyzeFreezing;	//true if it can catalyze freezing in neighboring regions
     bool catalyzeMelting;	//true if it can catalyze melting in neighboring regions
     bool canHetNucleate;
     bool canHomNucleate;
+	bool canHetNucleateLiquid;
+	bool canHomNucleateLiquid;
+	bool canHetNucleateLiquidSurface;
 
-	double thresholdHet;	//heterogeneous nucleation threshold
-    double thresholdHom;	//homogeneous nucleation threshold
+	double thresholdHet;	//heterogeneous nucleation threshold to solid
+    double thresholdHom;	//homogeneous nucleation threshold to solid
+	double thresholdHetLiquid;	//heterogeneous nucleation threshold to liquid
+    double thresholdHomLiquid;	//homogeneous nucleation threshold to liquid
+	double thresholdHetLiquidSurface;	//heterogeneous nucleation threshold to liquid at free surface
 } REGION;
 
 typedef struct			// Reporting information
@@ -293,15 +318,25 @@ typedef struct			// Simulation environment
 	bool calcIntraNode;		// true if intra-node calculations were made
 	bool calcHeatFlow;		// true if heat-flow calculations were made
 
+	double surfaceSpeedCoe;    // Speed up the interface response function at the surface
+	double interfaceSpeedCoe;  // Speed up the interface response function at the Si/SiO2 interface
+
+	double interfaceSuperheating;
+	double grainboundarySuperheating;
+
+	bool wettingGrainBoundaryMelting;  // Here we force the grain boundary to be wetted as soon as part of it reaches T_melt+superheating
+
 	int dTnode;				// maximum temperature change
 	int dInode;				// maximum node change
     int curLine;			// current line number for error reporting
     int modeError;			// selects actions to perform on error condition
 	int eraMax;				// number of eras during simulation
-    int numberNucleated;	// total number of nucleations in simulations
+    int numberNucleated;	// total number of solid nucleations in simulations
+	int numberNucleatedLiquid;	// total number of liquid nucleations in simulations
 	int numberPhases;		// number of unique phases
 	int numberSlush;		// current number of slush nodes
 	int numberLiquid;		// current number of liquid nodes
+	int numberSolid;
 	int seedStochastic;		// seed for rand() generator
 
 	double dTmax;			// maximum temperature change

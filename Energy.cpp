@@ -10,6 +10,7 @@
 #include "3dns.h"
 #include "phase.h"
 #include "report.h"
+#include <iostream>
 
 #define EXT_LEVEL
 #include "energy.h"
@@ -133,23 +134,25 @@ void LaserInit()
 		{
 			
 			egyX = (Laser.dataSpatialX.dataType == T_UNKNOWN) ? 1.0 :
-				Laser.dataSpatialX.Evaluate((Geometry.xMap[i] + 0.5 * DelX[i][J_FIRST][K_FIRST]) * CM_TO_M,
-											(Geometry.zMap[k] + 0.5 * DelZ[I_FIRST][J_FIRST][k]) * CM_TO_M );
+				Laser.dataSpatialX.Evaluate((Geometry.xMap[i] + 0.5 * DelX[i][J_FIRST][K_FIRST]) * CM_TO_M);
+										//	(Geometry.zMap[k] + 0.5 * DelZ[I_FIRST][J_FIRST][k]) * CM_TO_M );
 
 			egyZ = (Laser.dataSpatialZ.dataType == T_UNKNOWN) ? 1.0 :
 				Laser.dataSpatialZ.Evaluate((Geometry.zMap[k] + 0.5 * DelZ[I_FIRST][J_FIRST][k]) * CM_TO_M);
 
 			Laser.egySpatial[i][k] = egyX * egyZ;
+			//std::cout << "egySpatial: " << i << " " << k << " " << Laser.egySpatial[i][k] << std::endl;
 		}; //endloop k
+		//std::cout << Laser.egySpatial[i][0] << std::endl;
 	}; //endloop i
 
-	if (!Normalize(Laser.egySpatial, 0, 1))		//peak value must be 1
-	{
-		WarningMsg("Cant normalize laser SPATIAL profile, so using 0 everywhere... ");
-		Laser.egySpatial.Reset(I_LAST, K_LAST, 0);
-	}
+//	if (!Normalize(Laser.egySpatial, 0, 1))		//peak value must be 1
+//	{
+//		WarningMsg("Cant normalize laser SPATIAL profile, so using 0 everywhere... ");
+//		Laser.egySpatial.Reset(I_LAST, K_LAST, 0);
+//	}
 
-	Floor(Laser.egySpatial, LASER_THRESHOLD, 0);	//drop values below LASER_THRESHOLD
+//	Floor(Laser.egySpatial, LASER_THRESHOLD, 0);	//drop values below LASER_THRESHOLD
 
 	for (i = I_FIRST; i < I_LAST; i++)			//pre-calculate energy per node
 	{
@@ -167,6 +170,7 @@ void LaserInit()
 				if (Laser.beginAbsorption[i][k] == J_LAST)
 						break;
 			}; //endwhile
+			//std::cout << "beginAbsorption: " << i << " " << k << " " << Laser.beginAbsorption[i][k] << std::endl;
 		
 		}; //endloop k
 	}; //endloop i 
@@ -223,6 +227,52 @@ void LaserInit()
 	return;
 }; //endfunc
 
+//______________________________________________________
+//
+//	LaserMove
+//		Move the laser profile in X and Z direction
+//______________________________________________________
+void LaserMove()
+{
+	int i, k;
+	int numOffsets=0;	//number of offsets beyond simulation time
+	double egyX, egyZ;		//temporary energy values
+
+	Laser.egySpatial.Reset(I_LAST, K_LAST, 0); 
+	
+	for (i = I_FIRST; i < I_LAST; i++)			//construct 2D spatial density function
+	{
+		for (k = K_FIRST; k < K_LAST; k++)
+		{
+			
+			egyX = (Laser.dataSpatialX.dataType == T_UNKNOWN) ? 1.0 :
+				Laser.dataSpatialX.Evaluate(((Geometry.xMap[i] + 0.5 * DelX[i][J_FIRST][K_FIRST]) * CM_TO_M - Sim.sClock.curTime*Laser.velocityX),
+											((Geometry.zMap[k] + 0.5 * DelZ[I_FIRST][J_FIRST][k]) * CM_TO_M - Sim.sClock.curTime*Laser.velocityZ) );
+
+			egyZ = (Laser.dataSpatialZ.dataType == T_UNKNOWN) ? 1.0 :
+				Laser.dataSpatialZ.Evaluate((Geometry.zMap[k] + 0.5 * DelZ[I_FIRST][J_FIRST][k]) * CM_TO_M - Sim.sClock.curTime*Laser.velocityZ);
+
+			Laser.egySpatial[i][k] = egyX * egyZ;
+		}; //endloop k
+	}; //endloop i
+
+	if (!Normalize(Laser.egySpatial, 0, 1))		//peak value must be 1
+	{
+		WarningMsg("Cant normalize laser SPATIAL profile, so using 0 everywhere... ");
+		Laser.egySpatial.Reset(I_LAST, K_LAST, 0);
+	}
+
+	Floor(Laser.egySpatial, LASER_THRESHOLD, 0);	//drop values below LASER_THRESHOLD
+	
+	for (i = I_FIRST; i < I_LAST; i++)			//pre-calculate energy per node
+	{
+		for (k = K_FIRST; k < K_LAST; k++)
+		{
+			Laser.egySpatial[i][k] *= AreaXZ[i][J_FIRST][k];
+		}; //endloop k
+	}; //endloop i 
+}; //endfunc
+
 
 //______________________________________________________
 //
@@ -273,6 +323,8 @@ void LaserInput()
 
 											//calculate amount transmitted into sample
 			colEgyCurrent[i][k] = egyTemporal * Laser.egySpatial[i][k] * Transmit(i,k);
+			//std::cout << "colEgyCurrent: " << i << " " << k << " " << colEgyCurrent[i][k] << std::endl;
+			//std::cout << "Transmit: " << i << " " << k << " " << Transmit(i,k) << std::endl;
 			egyRemaining = colEgyCurrent[i][k];
 
 			j = Laser.beginAbsorption[i][k];
@@ -344,17 +396,20 @@ double Transmit(int i, int k)
 	k3 = PropertyAverage(nodeB, Phase[B(PhaseCodeSolid)]->indexK,
 				Phase[B(PhaseCodeLiquid)]->indexK);
 
+	//std::cout << "InSideTransmit: n3:" << n3 << " k3:" << k3 << std::endl;
+
 	if (Laser.beginAbsorption[i][k] > J_FIRST)		//a dielectric cap exists
 	{
 		nodeA = IJKToIndex(i, Laser.beginAbsorption[i][k] - 1, k);
 	
 		n2 = LOOK_UP(Phase[A(PhaseCodeSolid)]->indexN, A(T));				//index in dielectric medium
+		//std::cout << "n2:" << n2 << std::endl;
 
 		if (n2 != 1.0)		// a dielectric
 		{
-			rad = 4.0 * Geometry.yMap[Laser.beginAbsorption[i][k]] * n2 * PI / 
-				Laser.waveLength;		//optical length (assumes n2 constant throughout dielectric)
-
+			rad = 4.0 * Geometry.yMap[Laser.beginAbsorption[i][k]] * n2 * PI / Laser.waveLength;		//optical length (assumes n2 constant throughout dielectric)
+			//std::cout << "rad:" << rad << std::endl;
+			rad = 4.0 * 5.0 * n2 * PI / 308.0;
 			sqN2 = SQ (n2);
 			sqN3 = SQ (n3);
 			sqK3 = SQ (k3);

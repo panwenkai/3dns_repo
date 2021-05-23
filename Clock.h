@@ -11,7 +11,7 @@
 #define FS_TO_S		 ((double)(1E-15))
 #define PS_TO_S		 ((double)(1E-12))
 
-#define MIN_CLOCK	 ((double)1E-14)  //minimum time step
+#define MIN_CLOCK	 ((double)1E-15)  //minimum time step
 #define MAX_CLOCK	 ((double)1E-5)	  //maximum time step
 #define MAX_ERAS	 ((int) 32)	//maximum number of eras in one session
 #define MAX_TIME	 ((double)1E-3)	//maximum simulation time

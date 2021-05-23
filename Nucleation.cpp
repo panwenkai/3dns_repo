@@ -23,8 +23,11 @@ bool RandomCheck(double meanNum);
 //___________________________________
 // Private variables
 //___________________________________
-DMATRIX thresholdHom;	  //nucleation threshold for heterogeneous nucleation
-DMATRIX thresholdHet;     //nucleation threshold for homogeneous nucleation
+DMATRIX thresholdHom;	  //nucleation threshold for heterogeneous nucleation to solid
+DMATRIX thresholdHet;     //nucleation threshold for homogeneous nucleation to solid
+DMATRIX thresholdHomLiquid;	  //nucleation threshold for heterogeneous nucleation to liquid
+DMATRIX thresholdHetLiquid;     //nucleation threshold for homogeneous nucleation to liquid
+DMATRIX thresholdHetLiquidSurface;     //nucleation threshold for homogeneous nucleation to liquid
 double *randT3, *randT2, *randT1, *randT0;  //pre-calculated random values
 
 
@@ -82,6 +85,8 @@ void NucleateHeterogeneous(CELL &cellNew, CELL &cellOld, unsigned int nodeLiquid
 	
 			LIQ(DensityHetNuc) = densityNuc;		//reset nucleation probability density
 
+			//LIQ(DensityHetNuc) = 1 - exp(-densityNuc);
+
 			willNucleate = RandomCheck(LIQ(DensityHetNuc) * -1.0);
 		} //endif
 
@@ -108,6 +113,158 @@ void NucleateHeterogeneous(CELL &cellNew, CELL &cellOld, unsigned int nodeLiquid
 	return;
 }; //endfunc
 
+
+//______________________________________________________
+//
+//	NucleateHeterogeneousLiquid
+//		Check if heterogeneous nucleation will occur in a
+//		liquid node with a neighbor from an ALIEN material class
+//______________________________________________________
+void NucleateHeterogeneousLiquid(CELL &cellNew, CELL &cellOld, unsigned int nodeSolid, unsigned int nodeOther, const int dirToSolid, const double tInterface)
+{
+	bool willNucleate = false;
+	int pIndex, pSolid;
+	double densityNuc;		//nucleation probability density
+
+	const double UNIT_CONV = CM_TO_M * CM_TO_M;
+
+	if (!SOL(CanHetNucleateLiquid)	 ||			//non-nucleating
+		//!OTHER(CatalyzeMelting) ||			//non-catalytic interface
+		(BZONE(dirToSolid) > 0) )				//non-(100) neighbor
+
+		return;
+									//loop thru all possible phases
+	
+	if (SOL(T) < *(Phase[SOL(cellOld.cPhaseSolid)]->transitionTemp))
+		return;
+
+	densityNuc = Sim.sClock.curDTime * LOOK_UP(Phase[SOL(cellOld.cPhaseSolid)]->hetNucleationLiquid, tInterface);
+
+	//_______________ STOCHASTIC HETEROGENEOUS ____________________
+	if (Sim.modeStochastic)
+	{				
+		switch(dirToSolid) //solid to liquid direction
+		{
+			case EAST:
+			case WEST:
+				densityNuc *= SOL(AreaYZ) * UNIT_CONV;	//area converted to m^2 
+				break;
+			case SOUTH:
+			case NORTH:
+				densityNuc *= SOL(AreaXZ) * UNIT_CONV;	//area converted to m^2 
+				break;
+			case BACK:
+			case FRONT:
+				densityNuc *= SOL(AreaXY) * UNIT_CONV;	//area converted to m^2 
+				break;
+
+			default:		//no other directions are considered
+				ErrorMsg("Illegal direction call in NucleateHeterogeneousLiquid");
+		}; //endswitch
+	
+		SOL(DensityHetNucLiquid) = densityNuc;		//reset nucleation probability density
+
+		willNucleate = RandomCheck(SOL(DensityHetNucLiquid) * -1.0);
+	} //endif
+
+	//_______________ DETERMINISTIC HETEROGENEOUS ____________________
+	else
+	{
+		SOL(DensityHetNucLiquid) += densityNuc;		//increment nucleation density
+
+		willNucleate = 	(SOL(DensityHetNucLiquid) > SOL(thresholdHetLiquid));	// #/m2 density 
+	}; //endif
+
+	//________________ NUCLEATE IF NECESSARY _________________
+	if (willNucleate)
+	{
+		//To do: incorporate NodeMelt like from free surface
+		//NodeSolidify(cellNew, cellOld, nodeSolid, dirToSolid | HETEROGENEOUS, 
+		//	tInterface, pIndex, 0.0, ++Sim.numberNucleated);
+		NodeMelt(cellNew, cellOld, nodeSolid, Interface.dirInverse[dirToSolid] | HETEROGENEOUS_LIQUID, tInterface, 0.0);	
+		SOL(Velocity) = 0.0;	//force zero velocity initially
+			
+		ReportNucleationEvent(nodeSolid, dirToSolid | HETEROGENEOUS);
+	}; //endif
+	
+	return;
+}; //endfunc
+
+//______________________________________________________
+//
+//	NucleateHeterogeneousLiquidSurface
+//		Check if heterogeneous nucleation will occur in a
+//		liquid node with a neighbor from an ALIEN material class
+//______________________________________________________
+void NucleateHeterogeneousLiquidSurface(CELL &cellNew, CELL &cellOld, unsigned int nodeSolid, const int dirToSolid, const double tInterface)
+{
+	bool willNucleate = false;
+	int pIndex, pSolid;
+	double densityNuc;		//nucleation probability density
+
+	const double UNIT_CONV = CM_TO_M * CM_TO_M;
+
+	if (!SOL(CanHetNucleateLiquidSurface)	 ||			//non-nucleating
+		(BZONE(dirToSolid) > 0) )				//non-(100) neighbor
+
+		return;
+									//loop thru all possible phases
+	
+	if (SOL(T) < *(Phase[SOL(cellOld.cPhaseSolid)]->transitionTemp))
+		return;
+
+	densityNuc = Sim.sClock.curDTime * LOOK_UP(Phase[SOL(cellOld.cPhaseSolid)]->hetNucleationLiquidSurface, tInterface);
+	double* nucleationrate = Phase[SOL(cellOld.cPhaseSolid)]->hetNucleationLiquidSurface;
+
+	//_______________ STOCHASTIC HETEROGENEOUS ____________________
+	if (Sim.modeStochastic)
+	{				
+		switch(dirToSolid) //solid to liquid direction
+		{
+			case EAST:
+			case WEST:
+				densityNuc *= SOL(AreaYZ) * UNIT_CONV;	//area converted to m^2 
+				break;
+			case SOUTH:
+			case NORTH:
+				densityNuc *= SOL(AreaXZ) * UNIT_CONV;	//area converted to m^2 
+				break;
+			case BACK:
+			case FRONT:
+				densityNuc *= SOL(AreaXY) * UNIT_CONV;	//area converted to m^2 
+				break;
+
+			default:		//no other directions are considered
+				ErrorMsg("Illegal direction call in NucleateHeterogeneous");
+		}; //endswitch
+	
+		SOL(DensityHetNucLiquidSurface) = densityNuc;		//reset nucleation probability density
+
+		willNucleate = RandomCheck(SOL(DensityHetNucLiquidSurface) * -1.0);
+	} //endif
+
+	//_______________ DETERMINISTIC HETEROGENEOUS ____________________
+	else
+	{
+		SOL(DensityHetNuc) += densityNuc;		//increment nucleation density
+
+		willNucleate = 	(SOL(DensityHetNucLiquidSurface) > SOL(thresholdHetLiquidSurface));	// #/m2 density 
+	}; //endif
+
+	//________________ NUCLEATE IF NECESSARY _________________
+	if (willNucleate)
+	{
+		//To do: incorporate NodeMelt like from free surface
+		//NodeSolidify(cellNew, cellOld, nodeSolid, dirToSolid | HETEROGENEOUS, 
+		//	tInterface, pIndex, 0.0, ++Sim.numberNucleated);
+		NodeMelt(cellNew, cellOld, nodeSolid, Interface.dirInverse[dirToSolid] | HETEROGENEOUS_LIQUID, tInterface, 0.0);	
+		SOL(Velocity) = 0.0;	//force zero velocity initially
+			
+		ReportNucleationEvent(nodeSolid, dirToSolid | HETEROGENEOUS);
+	}; //endif
+	
+	return;
+}; //endfunc
 
 //______________________________________________________
 //
@@ -196,6 +353,86 @@ void NucleateHomogeneous(CELL &cellNew, CELL &cellOld)
 
 //______________________________________________________
 //
+//	NucleateHomogeneousLiquid
+//		Check if homogeneous nucleation will occur
+//		and if so, initiate solidification
+//______________________________________________________
+void NucleateHomogeneousLiquid(CELL &cellNew, CELL &cellOld)
+{
+	bool willNucleate = false;
+    int i, j, k;
+	int pIndex, pSolid;
+	int nodeA;
+	double densityNuc;		//nucleation probability density
+
+	const double CM_TO_M_3 = CM_TO_M * CM_TO_M * CM_TO_M;
+    
+  	if(Sim.numberSolid == 0)
+    	return;
+
+	for (i = I_FIRST; i < I_LAST; i++)	
+	{
+		if (!(*(Geometry.canChangeI + i)) )
+			continue;		//this page cant change
+
+		for (j = J_FIRST; j < J_LAST; j++)
+		{
+			if (!(*(Geometry.canChangeJ + j)) )
+				continue;		//this row cant change
+			
+			for (k = K_FIRST; k < K_LAST; k++)
+			{	
+				if (!(*(Geometry.canChangeK + k)) )
+					continue;		//this column cant change
+
+				nodeA = IJKToIndex(i, j, k);
+				
+				if ((A(cellOld.cState) != SOLID) || !A(CanHomNucleateLiquid))		//only solid nodes can nucleate
+					continue;
+
+				if (Sim.modeStochastic)		//reset probability for stochastic mode
+					A(DensityHomNucLiquid) = (double)0.0;
+
+				if (A(T) < *(Phase[A(cellOld.cPhaseSolid)]->transitionTemp))
+					continue;
+
+				densityNuc = Sim.sClock.curDTime * LOOK_UP(Phase[A(cellOld.cPhaseSolid)]->homNucleationLiquid, A(T));
+
+				//_______________ STOCHASTIC HOMOGENEOUS ____________________
+				if (Sim.modeStochastic)
+				{	
+					A(DensityHomNucLiquid) = densityNuc * A(Volume) * CM_TO_M_3;
+						
+					willNucleate = RandomCheck(A(DensityHomNucLiquid) * -1.0);
+				} //endif
+
+				//_______________ DETERMINISTIC HOMOGENEOUS ____________________
+				else
+				{
+					A(DensityHomNucLiquid) += densityNuc;		//increment nucleation density
+
+					willNucleate = 	( A(DensityHomNucLiquid) > A(thresholdHomLiquid) );	//heterogeneous
+				}; //endif
+					
+				//_______________ NUCLEATE IF NECESSARY _____________
+				if (willNucleate)
+				{
+					//To incoporate NodeMelting
+					//NodeSolidify(cellNew, cellOld, nodeA, HOMOGENEOUS, A(T), 0, 0.0, ++Sim.numberNucleated);
+					NodeMelt(cellNew, cellOld, nodeA, HETEROGENEOUS_LIQUID, A(T), 0.0);
+					//To incoporate liquid nucleation reporting
+					ReportNucleationEvent(nodeA, HOMOGENEOUS);
+				}; //endif
+	
+			}; //endloop k
+		}; //endloop j
+	}; //endloop i
+	
+	return;
+}; //endfunc
+
+//______________________________________________________
+//
 //      NucleationCleanup
 //       Increments nucleation probabilities in each node
 //______________________________________________________
@@ -205,12 +442,19 @@ void NucleationCleanup()
   	MatrixFree(CatalyzeMelting);
   	MatrixFree(DensityHetNuc);
     MatrixFree(DensityHomNuc);
+	MatrixFree(DensityHetNucLiquid);
+    MatrixFree(DensityHomNucLiquid);
 
   	MatrixFree(CanHetNucleate);
   	MatrixFree(CanHomNucleate);
+	MatrixFree(CanHetNucleateLiquid);
+  	MatrixFree(CanHomNucleateLiquid);
 
 	MatrixFree(thresholdHet);
 	MatrixFree(thresholdHom);
+	MatrixFree(thresholdHetLiquid);
+	MatrixFree(thresholdHomLiquid);
+	MatrixFree(thresholdHetLiquidSurface);
 }; //endfunc
 
 
@@ -230,10 +474,19 @@ void NucleationInit()
 
   	MatrixNew(&CanHetNucleate);
   	MatrixNew(&CanHomNucleate);
+	MatrixNew(&CanHetNucleateLiquid);
+  	MatrixNew(&CanHomNucleateLiquid);
+	MatrixNew(&CanHetNucleateLiquidSurface);
   	MatrixNew(&thresholdHet);
     MatrixNew(&thresholdHom);
+	MatrixNew(&thresholdHetLiquid);
+    MatrixNew(&thresholdHomLiquid);
+	MatrixNew(&thresholdHetLiquidSurface);
   	MatrixZero(MatrixNew(&DensityHetNuc));
   	MatrixZero(MatrixNew(&DensityHomNuc));
+	MatrixZero(MatrixNew(&DensityHetNucLiquid));
+  	MatrixZero(MatrixNew(&DensityHomNucLiquid));
+	MatrixZero(MatrixNew(&DensityHetNucLiquidSurface));
 
 	//_________ CHECK REGION INFORMATION _______________
 	for (r=0; r<Geometry.numberRegions; r++)
@@ -246,12 +499,24 @@ void NucleationInit()
 			if (!InRange (Region[r]->thresholdHet, (double)0.0, 1.001 * DOUBLE_INFINITY))
     			ErrorMsg ("HET_THRESHOLD out of range in %s %d", typeMsg, typeVal);
 
+			if (!InRange (Region[r]->thresholdHetLiquid, (double)0.0, 1.001 * DOUBLE_INFINITY))
+    			ErrorMsg ("HET_THRESHOLD_LIQUID out of range in %s %d", typeMsg, typeVal);
+
+			if (!InRange (Region[r]->thresholdHetLiquidSurface, (double)0.0, 1.001 * DOUBLE_INFINITY))
+    			ErrorMsg ("HET_THRESHOLD_LIQUID_SURFACE out of range in %s %d", typeMsg, typeVal);
+
 			if (!InRange (Region[r]->thresholdHom, (double)0.0, 1.001 * DOUBLE_INFINITY))
     			ErrorMsg ("HOM_THRESHOLD out of range in %s %d", typeMsg, typeVal);
 
+			if (!InRange (Region[r]->thresholdHomLiquid, (double)0.0, 1.001 * DOUBLE_INFINITY))
+    			ErrorMsg ("HOM_THRESHOLD_LIQUID out of range in %s %d", typeMsg, typeVal);
+
 								//must have finite thresholds to nucleate
 			Region[r]->canHetNucleate = (Region[r]->thresholdHet < DOUBLE_INFINITY);
-			Region[r]->canHomNucleate = (Region[r]->thresholdHom < DOUBLE_INFINITY);			
+			Region[r]->canHomNucleate = (Region[r]->thresholdHom < DOUBLE_INFINITY);
+			Region[r]->canHetNucleateLiquid = (Region[r]->thresholdHetLiquid < DOUBLE_INFINITY);
+			Region[r]->canHomNucleateLiquid = (Region[r]->thresholdHomLiquid < DOUBLE_INFINITY);
+			Region[r]->canHetNucleateLiquidSurface = (Region[r]->thresholdHetLiquidSurface < DOUBLE_INFINITY);
 
 			for (p=0; p < Phase[Region[r]->phaseLiquid]->numTransitions; p++)
 			{
@@ -263,13 +528,27 @@ void NucleationInit()
 						ErrorMsg("NUCLEATION_HET not defined for %s %s", 
 							Phase[phaseCode]->matlClassName, Phase[phaseCode]->phaseName);
 
+					if (Phase[phaseCode]->hetNucleationLiquid == NULL)
+						ErrorMsg("NUCLEATION_HET_LIQUID not defined for %s %s", 
+							Phase[phaseCode]->matlClassName, Phase[phaseCode]->phaseName);
+
 					if (!InRange (Phase[phaseCode]->hetNucleation, MIN_DEGREES, 
 							*(Phase[phaseCode]->transitionTemp), 0.0, HET_RATE_MAX))
-    					ErrorMsg("Heterogeneous nucleation rate out of range in %s %s",
+    					ErrorMsg("Heterogeneous soild nucleation rate out of range in %s %s",
 							Phase[phaseCode]->matlClassName, Phase[phaseCode]->phaseName);
+
+					//if (!InRange (Phase[phaseCode]->hetNucleationLiquid, *(Phase[phaseCode]->transitionTemp), 
+					//		MAX_DEGREES, 0.0, HET_RATE_MAX))
+    	//				ErrorMsg("Heterogeneous liquid nucleation rate out of range in %s %s",
+					//		Phase[phaseCode]->matlClassName, Phase[phaseCode]->phaseName);
 
 					if (!InRange (Phase[phaseCode]->hetNucleation, *(Phase[phaseCode]->transitionTemp), 
 							MAX_DEGREES, 0.0, NUCRATE_MIN))
+    					ErrorMsg("Heterogeneous nucleation rate must be zero above transition temperature in %s %s",
+							Phase[phaseCode]->matlClassName, Phase[phaseCode]->phaseName);
+
+					if (!InRange (Phase[phaseCode]->hetNucleationLiquid, MIN_DEGREES, 
+							*(Phase[phaseCode]->transitionTemp), 0.0, NUCRATE_MIN))
     					ErrorMsg("Heterogeneous nucleation rate must be zero above transition temperature in %s %s",
 							Phase[phaseCode]->matlClassName, Phase[phaseCode]->phaseName);
 				}; //endif
@@ -280,14 +559,28 @@ void NucleationInit()
 						ErrorMsg("NUCLEATION_HOM not defined for %s %s", 
 							Phase[phaseCode]->matlClassName, Phase[phaseCode]->phaseName);
 
+					if (Phase[phaseCode]->homNucleationLiquid == NULL)
+						ErrorMsg("NUCLEATION_HOM_LIQUID not defined for %s %s", 
+							Phase[phaseCode]->matlClassName, Phase[phaseCode]->phaseName);
+
 					if (!InRange (Phase[phaseCode]->homNucleation, MIN_DEGREES, 
 							*(Phase[phaseCode]->transitionTemp), 0.0, HOM_RATE_MAX))
-    					ErrorMsg("Homogeneous nucleation rate out of range in %s %s",
+    					ErrorMsg("Homogeneous solid nucleation rate out of range in %s %s",
+							Phase[phaseCode]->matlClassName, Phase[phaseCode]->phaseName);
+
+					if (!InRange (Phase[phaseCode]->homNucleationLiquid, *(Phase[phaseCode]->transitionTemp), 
+							MAX_DEGREES, 0.0, HOM_RATE_MAX))
+    					ErrorMsg("Homogeneous liquid nucleation rate out of range in %s %s",
 							Phase[phaseCode]->matlClassName, Phase[phaseCode]->phaseName);
 
 					if (!InRange (Phase[phaseCode]->homNucleation, *(Phase[phaseCode]->transitionTemp), 
 							MAX_DEGREES, 0.0, NUCRATE_MIN))
-    					ErrorMsg("Homogeneous nucleation rate must be zero above transition temperature in %s %s",
+    					ErrorMsg("Homogeneous solid nucleation rate must be zero above transition temperature in %s %s",
+							Phase[phaseCode]->matlClassName, Phase[phaseCode]->phaseName);
+
+					if (!InRange (Phase[phaseCode]->homNucleationLiquid, MIN_DEGREES, 
+							*(Phase[phaseCode]->transitionTemp), 0.0, NUCRATE_MIN))
+    					ErrorMsg("Homogeneous liquid nucleation rate must be zero above transition temperature in %s %s",
 							Phase[phaseCode]->matlClassName, Phase[phaseCode]->phaseName);
 				}; //endif
 			}; //endloop p;
@@ -306,6 +599,13 @@ void NucleationInit()
 					A(CanHomNucleate) = Region[r]->canHomNucleate;
 					A(thresholdHet)	= Region[r]->thresholdHet;
 					A(thresholdHom) = Region[r]->thresholdHom;
+
+					A(CanHetNucleateLiquid) = Region[r]->canHetNucleateLiquid;
+					A(CanHomNucleateLiquid) = Region[r]->canHomNucleateLiquid;
+					A(CanHetNucleateLiquidSurface) = Region[r]->canHetNucleateLiquidSurface;
+					A(thresholdHetLiquid) = Region[r]->thresholdHetLiquid;
+					A(thresholdHomLiquid) = Region[r]->thresholdHomLiquid;
+					A(thresholdHetLiquidSurface) = Region[r]->thresholdHetLiquidSurface;
 				}; //endloop k
 			}; //endloop j
 		}; //endloop i
@@ -317,8 +617,8 @@ void NucleationInit()
 	randT1 = new double[RAND_MAX+2];
 	randT0 = new double[RAND_MAX+2];
 
-	if ((randT3 == NULL) || (randT3 == NULL) ||
-			(randT3 == NULL) || (randT3 == NULL) )
+	if ((randT3 == NULL) || (randT2 == NULL) ||
+			(randT1 == NULL) || (randT0 == NULL) )
 		ErrorMsg("Out of memory");
 
 	const double R3 = 1.0 / (double)(RAND_MAX+1);

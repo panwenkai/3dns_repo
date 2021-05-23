@@ -6,7 +6,7 @@
 // |   (C) 1998-99  Columbia University, MSME
 // |   (C) 2000-01	Harvard University, DEAS
 // |__________________________________________________________
-
+#include <iostream>
 #include "3dns.h"
 #include "parsefunc.h"
 #include "files.h"
@@ -299,6 +299,24 @@ int LoadMaterialFile(string &fileName, int regionNum)
 	  		GenTable(entry.value, &(thisPhase->homNucleation), MIN_DEGREES, MAX_DEGREES, 1.0);
         }
 
+		else if( entry.keyWord == "NUCLEATION_HET_LIQUID" )
+	  	{
+			ParseLine(entry, T_CONST | T_FUNCTION | T_RPN | T_MATRIX2D, NULL, VAL_ANY, Report.pathSearch);
+	  		GenTable(entry.value, &(thisPhase->hetNucleationLiquid), MIN_DEGREES, MAX_DEGREES, 1.0);
+       	}
+
+      	else if( entry.keyWord == "NUCLEATION_HOM_LIQUID" )
+	 	{
+            ParseLine(entry, T_CONST | T_FUNCTION | T_RPN | T_MATRIX2D, NULL, VAL_ANY, Report.pathSearch);
+	  		GenTable(entry.value, &(thisPhase->homNucleationLiquid), MIN_DEGREES, MAX_DEGREES, 1.0);
+        }
+
+		else if( entry.keyWord == "NUCLEATION_HET_LIQUID_SURFACE" )
+	  	{
+			ParseLine(entry, T_CONST | T_FUNCTION | T_RPN | T_MATRIX2D, NULL, VAL_ANY, Report.pathSearch);
+	  		GenTable(entry.value, &(thisPhase->hetNucleationLiquidSurface), MIN_DEGREES, MAX_DEGREES, 1.0);
+       	}
+
       	else if( entry.keyWord == "THERMAL_CONDUCTIVITY" )
 	  	{
             ParseLine(entry, T_CONST | T_FUNCTION | T_RPN | T_MATRIX2D, NULL, VAL_ANY, Report.pathSearch);
@@ -452,6 +470,18 @@ void LoadOverlayBlock(FILEINFO &fInfo, ENTRY &entry, int regionNum)
 			entry.value.Load(&(thisRegion->canChange) );
         }
 
+		else if( entry.keyWord == "OVERLAY_IS_SURFACE" )
+        {
+            ParseLine(entry, T_BOOL, 1, NULL, NO_PATH);
+			entry.value.Load(&(thisRegion->isSurface) );
+        }
+
+		else if( entry.keyWord == "OVERLAY_IS_INTERFACE" )
+        {
+            ParseLine(entry, T_BOOL, 1, NULL, NO_PATH);
+			entry.value.Load(&(thisRegion->isInterface) );
+        }
+
       	else if( entry.keyWord == "OVERLAY_CATALYZE_FREEZING" )
         {
             ParseLine(entry, T_BOOL, 1, NULL, NO_PATH);
@@ -464,6 +494,18 @@ void LoadOverlayBlock(FILEINFO &fInfo, ENTRY &entry, int regionNum)
 			entry.value.Load(&(thisRegion->catalyzeMelting) );
         }
 
+		else if( entry.keyWord == "OVERLAY_GRAIN_INDEX" )
+		{
+            ParseLine(entry, T_INT, 1, VAL_POSITIVE , NO_PATH);
+			entry.value.Load(&(thisRegion->grainIndex) );
+        }
+
+		else if( entry.keyWord == "OVERLAY_LAYER_INDEX" )
+		{
+            ParseLine(entry, T_INT, 1, VAL_POSITIVE , NO_PATH);
+			entry.value.Load(&(thisRegion->layerIndex) );
+        }
+
       	else if( entry.keyWord == "OVERLAY_HET_THRESHOLD" )
 		{
             ParseLine(entry, T_FLOAT, 1, VAL_NON_NEGATIVE | VAL_FLAG_INFINITY, NO_PATH);
@@ -474,6 +516,24 @@ void LoadOverlayBlock(FILEINFO &fInfo, ENTRY &entry, int regionNum)
         {
             ParseLine(entry, T_FLOAT, 1, VAL_NON_NEGATIVE | VAL_FLAG_INFINITY, NO_PATH);
 			entry.value.Load(&(thisRegion->thresholdHom) );
+        }
+
+		else if( entry.keyWord == "OVERLAY_HET_THRESHOLD_LIQUID" )
+		{
+            ParseLine(entry, T_FLOAT, 1, VAL_NON_NEGATIVE | VAL_FLAG_INFINITY, NO_PATH);
+			entry.value.Load(&(thisRegion->thresholdHetLiquid) );
+        }
+
+        else if( entry.keyWord == "OVERLAY_HOM_THRESHOLD_LIQUID" )
+        {
+            ParseLine(entry, T_FLOAT, 1, VAL_NON_NEGATIVE | VAL_FLAG_INFINITY, NO_PATH);
+			entry.value.Load(&(thisRegion->thresholdHomLiquid) );
+        }
+
+		else if( entry.keyWord == "OVERLAY_HET_THRESHOLD_LIQUID_SURFACE" )
+		{
+            ParseLine(entry, T_FLOAT, 1, VAL_NON_NEGATIVE | VAL_FLAG_INFINITY, NO_PATH);
+			entry.value.Load(&(thisRegion->thresholdHetLiquidSurface) );
         }
 
       	else if( entry.keyWord == "OVERLAY_MATERIAL" )
@@ -578,6 +638,18 @@ void LoadParametersFile(string &datFileName)
 			Laser.waveLength *= M_TO_CM;
         }
 
+		else if( entry.keyWord == "LASER_VELOCITY_X" )
+		{
+            ParseLine(entry, T_FLOAT, 1, VAL_ANY, NO_PATH);
+        	entry.value.Load(&(Laser.velocityX));
+        }
+
+		else if( entry.keyWord == "LASER_VELOCITY_Z" )
+		{
+            ParseLine(entry, T_FLOAT, 1, VAL_ANY, NO_PATH);
+        	entry.value.Load(&(Laser.velocityZ));
+        }
+
       	else if( entry.keyWord == "LAYER_CAN_CHANGE" )
         {
 			bool *temp;
@@ -588,6 +660,36 @@ void LoadParametersFile(string &datFileName)
 			{
 				thisRegion = RegionNew(r);
 				thisRegion->canChange = temp[r]; 
+			} //endloop 
+			
+			delete [] temp;
+        }
+
+		else if( entry.keyWord == "LAYER_IS_SURFACE" )
+        {
+			bool *temp;
+			ParseLine(entry, T_BOOL, &(Geometry.jZones), NULL, NO_PATH);
+			entry.value.Load(&temp);
+			
+			for (r = LAYER_FIRST; r < LAYER_LAST; r++)	//distribute info to regions
+			{
+				thisRegion = RegionNew(r);
+				thisRegion->isSurface = temp[r]; 
+			} //endloop 
+			
+			delete [] temp;
+        }
+
+		else if( entry.keyWord == "LAYER_IS_INTERFACE" )
+        {
+			bool *temp;
+			ParseLine(entry, T_BOOL, &(Geometry.jZones), NULL, NO_PATH);
+			entry.value.Load(&temp);
+			
+			for (r = LAYER_FIRST; r < LAYER_LAST; r++)	//distribute info to regions
+			{
+				thisRegion = RegionNew(r);
+				thisRegion->isInterface = temp[r]; 
 			} //endloop 
 			
 			delete [] temp;
@@ -623,6 +725,36 @@ void LoadParametersFile(string &datFileName)
 			delete [] temp;
         }
 
+		else if( entry.keyWord == "LAYER_GRAIN_INDEX" )
+        {
+            int *temp;
+            ParseLine(entry, T_INT, &(LAYER_LAST), NULL, NO_PATH);
+			entry.value.Load(&temp);
+
+			for (r = LAYER_FIRST; r < LAYER_LAST; r++)	//distribute info to regions
+			{
+				thisRegion = RegionNew(r);
+				thisRegion->grainIndex = temp[r]; 
+			} //endloop 
+			
+			delete [] temp;
+        }
+
+		else if( entry.keyWord == "LAYER_LAYER_INDEX" )
+        {
+            int *temp;
+            ParseLine(entry, T_INT, &(LAYER_LAST), NULL, NO_PATH);
+			entry.value.Load(&temp);
+
+			for (r = LAYER_FIRST; r < LAYER_LAST; r++)	//distribute info to regions
+			{
+				thisRegion = RegionNew(r);
+				thisRegion->layerIndex = temp[r]; 
+			} //endloop 
+			
+			delete [] temp;
+        }
+
         else if( entry.keyWord == "LAYER_HET_THRESHOLD" )
         {
             double *temp;
@@ -650,6 +782,54 @@ void LoadParametersFile(string &datFileName)
 			{
 				thisRegion = RegionNew(i);
 				thisRegion->thresholdHom = temp[i]; 
+			} //endloop 
+
+			delete [] temp;
+        }
+
+		else if( entry.keyWord == "LAYER_HET_THRESHOLD_LIQUID" )
+        {
+            double *temp;
+			
+			ParseLine(entry, T_FLOAT, &(Geometry.jZones), VAL_NON_NEGATIVE | VAL_FLAG_INFINITY, NO_PATH);
+			entry.value.Load(&temp);
+
+			for (i=LAYER_FIRST; i<LAYER_LAST; i++)	//distribute info to regions
+			{
+				thisRegion = RegionNew(i);
+				thisRegion->thresholdHetLiquid = temp[i]; 
+			} //endloop 
+
+			delete [] temp;
+        }
+
+      	else if( entry.keyWord == "LAYER_HOM_THRESHOLD_LIQUID" )
+        {
+            double *temp;
+			
+			ParseLine(entry, T_FLOAT, &(Geometry.jZones), VAL_NON_NEGATIVE | VAL_FLAG_INFINITY, NO_PATH);
+			entry.value.Load(&temp);
+
+			for (i=LAYER_FIRST; i<LAYER_LAST; i++)	//distribute info to regions
+			{
+				thisRegion = RegionNew(i);
+				thisRegion->thresholdHomLiquid = temp[i]; 
+			} //endloop 
+
+			delete [] temp;
+        }
+
+		else if( entry.keyWord == "LAYER_HET_THRESHOLD_LIQUID_SURFACE" )
+        {
+            double *temp;
+			
+			ParseLine(entry, T_FLOAT, &(Geometry.jZones), VAL_NON_NEGATIVE | VAL_FLAG_INFINITY, NO_PATH);
+			entry.value.Load(&temp);
+
+			for (i=LAYER_FIRST; i<LAYER_LAST; i++)	//distribute info to regions
+			{
+				thisRegion = RegionNew(i);
+				thisRegion->thresholdHetLiquidSurface = temp[i]; 
 			} //endloop 
 
 			delete [] temp;
@@ -696,6 +876,12 @@ void LoadParametersFile(string &datFileName)
 			entry.value.Load(&(Sim.modeRadiation));			
         }
 
+		else if( entry.keyWord == "WETTING_GRAIN_BOUNDARY_MELTING" )
+        {
+        	ParseLine(entry, T_BOOL, 1, NULL, NO_PATH);
+			entry.value.Load(&(Sim.wettingGrainBoundaryMelting));			
+        }
+
 		else if( entry.keyWord == "MODE_RESOLIDIFY_STOP" )
         {
         	ParseLine(entry, T_BOOL, 1, NULL, NO_PATH);
@@ -705,7 +891,8 @@ void LoadParametersFile(string &datFileName)
         else if( entry.keyWord == "MODE_STOCHASTIC" )
         {
         	ParseLine(entry, T_BOOL, 1, NULL, NO_PATH);
-			entry.value.Load(&(Sim.modeStochastic));			
+			entry.value.Load(&(Sim.modeStochastic));
+			
         }
 
 
@@ -753,13 +940,13 @@ void LoadParametersFile(string &datFileName)
 			LoadOverlayBlock(fInfo, entry, curRegion++);
 		}
 
-/*      else if( entry.keyWord == "PERIODIC_IJK" )
+        else if( entry.keyWord == "PERIODIC_IJK" )
         {
             ParseLine(entry, T_BOOL, 3, NULL, NO_PATH);
 			Geometry.modePeriodic = new bool[3];
 			entry.value.Load(&(Geometry.modePeriodic));
         }
-*/
+
 
 		else if( entry.keyWord == "REPORT_HISTORY" )
         {
@@ -813,6 +1000,38 @@ void LoadParametersFile(string &datFileName)
 		{	
 			ParseLine(entry, T_INT, 1, VAL_POSITIVE | VAL_FLAG_ALL, NO_PATH);
 			entry.value.Load(&(Sim.seedStochastic));
+		}
+
+		else if( entry.keyWord == "SURFACE_SPEED" )
+		{	
+			ParseLine(entry, T_FLOAT, 1, VAL_POSITIVE , NO_PATH);
+			entry.value.Load(&(Sim.surfaceSpeedCoe));
+			//std::cout << "Recognized!!" << std::endl;
+			//std::cout << Sim.surfaceSpeedCoe << std::endl;
+		}
+
+		else if( entry.keyWord == "INTERFACE_SPEED" )
+		{	
+			ParseLine(entry, T_FLOAT, 1, VAL_POSITIVE , NO_PATH);
+			entry.value.Load(&(Sim.interfaceSpeedCoe));
+			//std::cout << "Recognized!!" << std::endl;
+			//std::cout << (Sim.interfaceSpeedCoe) << std::endl;
+		}
+
+		else if( entry.keyWord == "INTERFACE_SUPERHEATING" )
+		{	
+			ParseLine(entry, T_FLOAT, 1, VAL_POSITIVE , NO_PATH);
+			entry.value.Load(&(Sim.interfaceSuperheating));
+			//std::cout << "Recognized!!" << std::endl;
+			//std::cout << (Sim.interfaceSpeedCoe) << std::endl;
+		}
+
+		else if( entry.keyWord == "GRAINBOUNDARY_SUPERHEATING" )
+		{	
+			ParseLine(entry, T_FLOAT, 1, VAL_POSITIVE , NO_PATH);
+			entry.value.Load(&(Sim.grainboundarySuperheating));
+			//std::cout << "Recognized!!" << std::endl;
+			//std::cout << (Sim.interfaceSpeedCoe) << std::endl;
 		}
 
       	else if( entry.keyWord == "SIZE_I" )

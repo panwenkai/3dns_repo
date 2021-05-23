@@ -32,7 +32,7 @@
 class string
 {
 	public:
-		&string(unsigned int n=0);		//constructor
+		string(unsigned int n=0);		//constructor
 		string(const char *str);        //constructor for typcast from char *
 		string(const int i);			//constructor for typecast from int
 		string(const string &rhs);	    //copy constructor
@@ -46,7 +46,7 @@ class string
 		bool operator==(const char *rhs);		
 
 		string& operator new;
-		void* operator new[] (unsigned int numElements); //allocate clean array
+		void* operator new[] (size_t numElements); //allocate clean array
 		
 		operator bool();		//typecast from 'string' to 'bool'
 		operator bool() const;  //typecast from 'const string' to 'bool'
