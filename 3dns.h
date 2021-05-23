@@ -54,12 +54,12 @@
 #define LOOP_K	for(k=K_FIRST; k<K_LAST; k++)
 
 #define MIN_DEGREES  ((int)77)		       //minimum temperature
-#define MAX_DEGREES	 ((int)4000)	       //maximum degrees in lookup table
+#define MAX_DEGREES	 ((int)3300)	       //maximum degrees in lookup table
 
 #define MAX_DIM		 ((int)(3))			 //maximum number of dimensions
-#define MAX_I        ((int)(0x400))      //maximum number of i-nodes
-#define MAX_J        ((int)(0x200))      //maximum number of j-nodes
-#define MAX_K		 ((int)(0x100))		 //maximum number of k-nodes
+#define MAX_I        ((int)(0x4000))      //maximum number of i-nodes
+#define MAX_J        ((int)(0x2000))      //maximum number of j-nodes
+#define MAX_K		 ((int)(0x1000))		 //maximum number of k-nodes
 #define MAX_NODES	 ((int)(0x1000000))	 //maximum total number of nodes
 #define MAX_JREGIONS 16		       //maximum vertical regions (layers)
 #define MAX_IREGIONS 16		       //maximum horizontal regions
@@ -73,7 +73,7 @@
 
 #define MAX_TCHANGE	 ((double)1000.0)	//maximum temperature change
 #define MAX_ICHANGE	 ((double)0.98)		//maximum fraction solid change
-#define MAX_RETRIES	 ((int) 6)			//maximum number of retries for clock reduction
+#define MAX_RETRIES	 ((int) 12)			//maximum number of retries for clock reduction
 
 #define MIN_LAMBDA	 ((double)1E-7) //minimum laser wavelength [m]
 #define MAX_LAMBDA	 ((double)1E-5)	//maximum laser wavelength [m]
@@ -90,7 +90,9 @@
 #define FRONT ((int)0x010)
 #define BACK ((int)0x020)
 #define HETEROGENEOUS ((int)0x040)	//special hemispherical interface
+#define HETEROGENEOUS_LIQUID ((int)0x140)	//special hemispherical interface
 #define HOMOGENEOUS ((int)0x080)	//special spherical interface
+#define HOMOGENEOUS_LIQUID ((int)0x180)	//special spherical interface
 #define SURFACEMELT	((int)0x100)
 #define ALL_DIRECTIONS ((int)0x1FF)   // NESWUDHHS = 9 filled bits
 #define ALL_DIRORDINARY	((int)0x03F)	// NESWUD = 6 filled bits
@@ -206,7 +208,6 @@ typedef struct			// Laser parameters
     GENERIC dataTemporal;	//input temporal coordinates
 }
 LASER;
-
 typedef struct
 {
 	string phaseName;		//"LIQUID" or any other solid phase name
@@ -217,8 +218,11 @@ typedef struct
     
     double *enthalpyH;   	//lookup table heat of fusion
     double *heatCapacity;	//lookup table [MAX_DEGREES]
-    double *hetNucleation;	//heterogeneous nucleation
-    double *homNucleation;	//homogeneous nucleation
+    double *hetNucleation;	//heterogeneous nucleation to solid
+    double *homNucleation;	//homogeneous nucleation to solid
+	double *hetNucleationLiquid;  //heterogeneous nucleation to liquid
+	double *homNucleationLiquid;  //homogeneous nucleation to liquid
+	double *hetNucleationLiquidSurface;  //heterogeneous nucleation to liquid at free surface
     double *indexN;
     double *indexK;
     double *interfaceResponse;	//lookup table
@@ -248,9 +252,15 @@ typedef struct
     bool catalyzeMelting;	//true if it can catalyze melting in neighboring regions
     bool canHetNucleate;
     bool canHomNucleate;
+	bool canHetNucleateLiquid;
+	bool canHomNucleateLiquid;
+	bool canHetNucleateLiquidSurface;
 
-	double thresholdHet;	//heterogeneous nucleation threshold
-    double thresholdHom;	//homogeneous nucleation threshold
+	double thresholdHet;	//heterogeneous nucleation threshold to solid
+    double thresholdHom;	//homogeneous nucleation threshold to solid
+	double thresholdHetLiquid;	//heterogeneous nucleation threshold to liquid
+    double thresholdHomLiquid;	//homogeneous nucleation threshold to liquid
+	double thresholdHetLiquidSurface;	//heterogeneous nucleation threshold to liquid at free surface
 } REGION;
 
 typedef struct			// Reporting information
@@ -298,10 +308,12 @@ typedef struct			// Simulation environment
     int curLine;			// current line number for error reporting
     int modeError;			// selects actions to perform on error condition
 	int eraMax;				// number of eras during simulation
-    int numberNucleated;	// total number of nucleations in simulations
+    int numberNucleated;	// total number of solid nucleations in simulations
+	int numberNucleatedLiquid;	// total number of liquid nucleations in simulations
 	int numberPhases;		// number of unique phases
 	int numberSlush;		// current number of slush nodes
 	int numberLiquid;		// current number of liquid nodes
+	int numberSolid;
 	int seedStochastic;		// seed for rand() generator
 
 	double dTmax;			// maximum temperature change

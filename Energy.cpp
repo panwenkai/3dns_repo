@@ -192,7 +192,7 @@ void LaserInit()
 					0.0, 1.0/LASER_THRESHOLD, Sim.sClock.curTime + timeOffset );
 		
 			Laser.peakTemporal = max(Laser.peakTemporal, curIntensity);  //find peak value
-			thisEgy += curIntensity * Sim.sClock.curDTime;		//newtons method
+			thisEgy += curIntensity * Sim.sClock.curDTime;		//newtons method (integration)
 		
 		} while ( Sim.sClock.Increment() ); 
 
@@ -252,13 +252,14 @@ void LaserInput()
   	double egyTemporal;
 	double egyRemaining;
 	double egyThisNode;
-
+	
+	MATRIX2D spatial3d; // modified
 	unsigned int nodeA;
 
   	MatrixZero(QLaser);
   	
 	egyTemporal = Laser.dataTemporal.Evaluate(Sim.sClock.curTime);  //evaluate temporal function
-
+	//spatial3d = input_3d(Sim.sClock.curTime); //modifed
 	if (egyTemporal < (Laser.peakTemporal * LASER_THRESHOLD))	//laser is effectively off
 		return;
 	
@@ -268,11 +269,13 @@ void LaserInput()
 	{
 		for (k = K_FIRST; k < K_LAST; k++)
 		{
-			if ((Laser.egySpatial[i][k] == 0.0) || (Laser.beginAbsorption[i][k] == J_LAST))
+			if ((Laser.egySpatial[i][k] == 0.0) || (Laser.beginAbsorption[i][k] == J_LAST)) //original
+			//if ((spatial3d[i][k] == 0.0) || (Laser.beginAbsorption[i][k] == J_LAST))
 				continue;							//no laser energy here
 
 											//calculate amount transmitted into sample
-			colEgyCurrent[i][k] = egyTemporal * Laser.egySpatial[i][k] * Transmit(i,k);
+			//colEgyCurrent[i][k] = egyTemporal * Laser.egySpatial[i][k] * Transmit(i,k); //original
+			colEgyCurrent[i][k] = egyTemporal * spatial3d[i][k] * Transmit(i, k); //modified
 			egyRemaining = colEgyCurrent[i][k];
 
 			j = Laser.beginAbsorption[i][k];

@@ -751,13 +751,13 @@ void GENERIC::Store(MATRIX2D *matx)
 
 	else
 	{
-		for (j = 2; j < (unsigned int)matx->Rows(); j++)		//check for monotonic map
+		for (j = 2; j < (unsigned int)matx->Rows(); j++)		//check for monotonic map of time
 			if ((*(matx))[j][0] <= (*(matx))[j-1][0])
 				return;
 
 		gValue.matx2d = new MATRIX2D;	//allocate memory
 		*(gValue.matx2d) = *(matx);	//deep copy into new data
-
+		printf("OK! \n");
 		dataType = T_MATRIX2D;
 		numElements = 1;
 	}; //endif
@@ -1171,6 +1171,7 @@ void ParseLine(ENTRY &entry, int typeSpec, int numSpec, int valSpec, string *pat
 				ErrorMsg("Cannot load 3D file");
 				
 			//entry.value = (void *)Submatrix(data3D, pageNum)
+			entry.value = (void *)data3D.SubMatrix()
 		}; 				
 			break;
 

@@ -21,7 +21,10 @@ void Nucleation (void);
 void NucleationCleanup (void);
 void NucleationInit (void);
 void NucleateHeterogeneous(CELL &cellNew, CELL &cellOld, unsigned int nodeLiquid, unsigned int nodeOther, const int dirSoltoLiq, const double tInterface);
+void NucleateHeterogeneousLiquid(CELL &cellNew, CELL &cellOld, unsigned int nodeSolid, unsigned int nodeOther, const int dirToSolid, const double tInterface);
+void NucleateHeterogeneousLiquidSurface(CELL &cellNew, CELL &cellOld, unsigned int nodeSolid, const int dirToSolid, const double tInterface);
 void NucleateHomogeneous(CELL &cellNew, CELL &cellOld);
+void NucleateHomogeneousLiquid(CELL &cellNew, CELL &cellOld);
 void NucleationEventReport(int i, int j, int k, double nucNumber);
 
 
@@ -38,8 +41,14 @@ void NucleationEventReport(int i, int j, int k, double nucNumber);
 #undef EXT_LEVEL
 EXTERN BMATRIX CanHetNucleate;
 EXTERN BMATRIX CanHomNucleate;
-EXTERN DMATRIX DensityHetNuc;		//heterogeneous nucleation density
-EXTERN DMATRIX DensityHomNuc;       //homogeneous nucleation density
+EXTERN BMATRIX CanHetNucleateLiquid;
+EXTERN BMATRIX CanHomNucleateLiquid;
+EXTERN BMATRIX CanHetNucleateLiquidSurface;
+EXTERN DMATRIX DensityHetNuc;		//heterogeneous nucleation density to soild
+EXTERN DMATRIX DensityHomNuc;       //homogeneous nucleation density to soild
+EXTERN DMATRIX DensityHetNucLiquid;		//heterogeneous nucleation density to liquid
+EXTERN DMATRIX DensityHomNucLiquid;       //homogeneous nucleation density to liquid
+EXTERN DMATRIX DensityHetNucLiquidSurface;		//heterogeneous nucleation density to liquid
 #undef EXTERN
 
 #endif

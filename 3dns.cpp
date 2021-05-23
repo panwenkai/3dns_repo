@@ -18,7 +18,7 @@
 // |	  v2.8	  J.Leonard						02-15-99
 // |	  v3.0	  J.Leonard / Visual C++6, 3D	07-28-99
 // |	  v3.7    J.Leonard						11-14-01
-// |	  v4.0    W.Pan
+// |
 // |    (C) 1995-99      Columbia University, MSME
 // |    (C) 2000-01	Harvard University, DEAS
 // |_____________________________________________________
@@ -54,12 +54,16 @@ int main (int argc, char **argv)
 
 	ZeroStructures ();		      //set all globals structs to known state (0)
 
+	std::cout<< "argc = " << argc << std::endl;
+	std::cout<< "argv[0] = " << argv[0] << std::endl;
+	std::cout<< "argv[1] = " << argv[1] << std::endl;
+
 	if ((argc == 1) || (argc > 3))
   	{
     	ErrorMsg ("Usage %s [-b] data_file\n", argv[0]);
   	}
 
-  	else if ((argc == 3) && (!strcmp(argv[1], "-b"))) //Compares the C string str1 to the C string str2.
+  	else if ((argc == 3) && (!strcmp(argv[1], "-b")))
   	{
     	datFileName = argv[2];
     	Sim.modeError = ERR_BATCH;
@@ -298,7 +302,7 @@ void GeometryInit (void)
 	char *typeMsg;
 	int typeVal;
 
-	if (!InRange(Geometry.nodesI, 0, Geometry.iZones, 1, MAX_I)) //InRange (int *array, int iStart, int iStop, int vMin, int vMax)
+	if (!InRange(Geometry.nodesI, 0, Geometry.iZones, 1, MAX_I))
     	ErrorMsg("NODES_I out of range, or not specified");
 
     if (!InRange(Geometry.nodesJ, 0, Geometry.jZones, 1, MAX_J))

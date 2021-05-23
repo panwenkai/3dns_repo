@@ -6,7 +6,7 @@
 // |   (C) 1998-99  Columbia University, MSME
 // |   (C) 2000-01	Harvard University, DEAS
 // |__________________________________________________________
-
+#include <iostream>
 #include "3dns.h"
 #include "nucleation.h"
 #include "parsefunc.h"		       //for LOOK_UP
@@ -70,7 +70,7 @@ DMATRIX fractionNew;	//new fraction solid
 DMATRIX timeXInter;		//extra time from inter-node calculations
 DMATRIX timeXIntra;		//extra time from intra-node calculations
 
-int oldSlush, oldLiquid;
+int oldSlush, oldLiquid, oldSolid;
 	
 inline double TIMELEFT(double iNew, double iOld)
 {	return( (iNew>1) ? (iNew-1.0)/(iNew-iOld) : ((iNew<0) ? iNew/(iNew-iOld) : 0) ); }
@@ -112,14 +112,17 @@ void CheckNodeMelt(CELL &cellNew, CELL &cellOld, const int nodeA,
 void CheckNodeMeltAlien(CELL &cellNew, CELL &cellOld, const int nodeSolid, const int nodeOther, const int dirSolToLiq, const double tInterface)
 {
 	if (!SOL(CanChange))	//if node can't melt
-		return;							
+		return;		
+
+	//NucleateHeterogeneousLiquid(cellNew, cellOld, nodeSolid, nodeOther, Interface.dirInverse[dirSolToLiq], tInterface);
+
 							//same material class (RA p.755)
 	if (OTHER(CatalyzeMelting) && (tInterface > TMelt(cellOld.cPhaseSolid, nodeSolid)) )
 	{
 		NodeMelt(cellNew, cellOld, nodeSolid, dirSolToLiq | SURFACEMELT, tInterface, 0.0);
 		OTHER(Velocity) = 0.0;
 	};
-
+	
 	return;
 }; //endfunc
 
@@ -132,6 +135,23 @@ void CheckNodeMeltAlien(CELL &cellNew, CELL &cellOld, const int nodeSolid, const
 //______________________________________________________
 void CheckNodeMeltSurface(CELL &cellNew, CELL &cellOld, int nodeA, int nodeB, int dirAtoSurf)
 {
+	/*
+	double tSurf;	//extrapolated surface temperature
+	tSurf = 1.5 * A(T) - 0.5 * B(T);	//assumes equal size nodes ! change this
+	
+	NucleateHeterogeneousLiquidSurface(cellNew, cellOld, nodeA, Interface.crystalType[dirAtoSurf], tSurf);
+
+	if (((A(cellOld.cState) == SLUSH) && IS_ORDINARY(A(cellOld.cDirection)) ))
+	{
+	
+		if (tSurf > TMelt(cellOld.cPhaseSolid, nodeA))
+			NodeMelt(cellNew, cellOld, nodeA, dirAtoSurf | SURFACEMELT, tSurf, 0.0);
+	}; //endif
+	
+	return;
+	*/
+	
+	
 	double tSurf;	//extrapolated surface temperature
 	
 	if (((A(cellOld.cState) == SOLID) && A(CanChange)) ||
@@ -144,6 +164,7 @@ void CheckNodeMeltSurface(CELL &cellNew, CELL &cellOld, int nodeA, int nodeB, in
 	}; //endif
 
 	return;
+	
 }; //endfunc
 
 
@@ -323,6 +344,7 @@ void InterNode()
 	}; //endloop k
 	
 	NucleateHomogeneous(cellNew, cellOld);		//Homogeneous nucleation
+	NucleateHomogeneousLiquid(cellNew, cellOld);		//Homogeneous nucleation
 
 	//___________ SPECIAL EDGE CONDITIONS ____________
 	if (Geometry.canChangeJ[J_FIRST])	
@@ -354,6 +376,7 @@ void InterNode()
 				{
 					for (bz = MAX_BZ-1, dir=0; bz >= 0; bz--)	//combine all zone contributions
 					{
+						//std::cout << "dir = " << dir << std::endl;
 						dir &= Interface.dirKeep[bz][A(slushDir[bz])];	//clear some lesser zone bits
 						dir |= A(slushDir[bz]);		//add directions from this zone
 					}; //endloop bz
@@ -430,6 +453,7 @@ int IntraNode()
 
 	oldSlush = Sim.numberSlush;		//save number of slush nodes
 	oldLiquid = Sim.numberLiquid;	//save number of liquid nodes
+	oldSolid = Sim.numberSolid;     //save number of solid nodes
 
 	cellOld.cHistory = PhaseHistory;
 	cellOld.cState = State;
@@ -520,6 +544,7 @@ void IntraNodeDump()
 
 		Sim.numberSlush = oldSlush;
 		Sim.numberLiquid = oldLiquid;
+		Sim.numberSolid = oldSolid;
 	
 		Sim.calcIntraNode = false;
 	}; //endif
@@ -730,11 +755,22 @@ double MotionNode(CELL &cellNew, CELL &cellOld, const int i, const int j, const 
 			break;
 
 		default:		//use 3D scaling
-			posOld = PositionHigh(A(cellOld.cFraction));	//position=fraction here
-			posNew = posOld + 2.0 * (Sim.sClock.curDTime + A(cellOld.cTimeX)) * A(Velocity) *
-				(1/DX + 1/DY + 1/DZ);
-			A(cellNew.cFraction) = FractionHigh(posNew, ICOMP, isComplete);														//fraction = posNew
-			break;
+			if(A(cellOld.cDirection)>((int)0x100)) //In this case we have a liquid nucleation
+			{
+				posOld = PositionHigh(A(cellOld.cFraction));	//position=fraction here
+				posNew = posOld - 2.0 * (Sim.sClock.curDTime + A(cellOld.cTimeX)) * A(Velocity) *
+					(1/DX + 1/DY + 1/DZ);
+				A(cellNew.cFraction) = FractionHigh(posNew, ICOMP, isComplete);														//fraction = posNew
+				break;
+			}
+			else //In this case we have a solid nucleation
+			{
+				posOld = PositionHigh(A(cellOld.cFraction));	//position=fraction here
+				posNew = posOld + 2.0 * (Sim.sClock.curDTime + A(cellOld.cTimeX)) * A(Velocity) *
+					(1/DX + 1/DY + 1/DZ);
+				A(cellNew.cFraction) = FractionHigh(posNew, ICOMP, isComplete);														//fraction = posNew
+				break;
+			}
 
 		}; //endswitch
 
@@ -876,6 +912,7 @@ void NodeMelt(CELL &cellNew, CELL &cellOld, const int nodeA, const int dirToLiq,
 	if (A(cellNew.cState) == SOLID)		//initial melting
 	{
 		Sim.numberSlush++;
+		Sim.numberSolid--;
 		HistorySet(cellNew.cHistory, nodeA, SLUSH, A(cellOld.cPhaseSolid));
 	}; //endif
 
@@ -960,6 +997,7 @@ void NodeSolidifyComplete(CELL &cellNew, CELL &cellOld, const int nodeA, double 
 	A(FractionSolid) = 1.;
 	HistorySet(cellNew.cHistory, nodeA, SOLID, A(cellOld.cPhaseSolid));
 	Sim.numberSlush--;
+	Sim.numberSolid++;
 
 	return;
 }; //endfunc
@@ -1059,6 +1097,10 @@ void PhaseInit ()
 	int i, j, k;	//pointers to region positions
 	int nodeA;
 
+	Sim.numberLiquid = 0;
+	Sim.numberSlush = 0;
+	Sim.numberSolid = 0;
+
     MatrixNew (&CanChange);
     MatrixNew (&FractionSolid);
 	MatrixZero(MatrixNew(&GrainCode));
@@ -1072,7 +1114,7 @@ void PhaseInit ()
     MatrixZero(MatrixNew(&QInterface));
     MatrixZero(MatrixNew(&SlushDirection));
     MatrixNew (&TInterface);
-    MatrixNew (&State);
+    MatrixZero(MatrixNew (&State));
     MatrixNew (&Velocity);
 
 	MatrixZero(MatrixNew(&canInteract));
@@ -1198,8 +1240,8 @@ void PhaseInit ()
 					
 					else //solid nodes
 					{
-						if (A(State) == LIQUID)
-							Sim.numberLiquid--;
+						if (A(State) != SOLID)
+							Sim.numberSolid++;
 
 						A(State) = SOLID;
 						A(PhaseCodeSolid) = Region[r]->phaseStart;
